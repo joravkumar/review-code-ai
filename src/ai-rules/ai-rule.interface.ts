@@ -1,12 +1,12 @@
+export type RuleSeverity = 'error' | 'warning' | 'info';
+
 export interface AIRule {
   id: string;
   name: string;
   description: string;
-  systemPrompt: string;
-  userPrompt: string;
-  tags?: string[];
-  // Optional function to modify the prompt based on the diff
-  preProcessDiff?: (diff: string) => string;
-  severity?: 'warning' | 'error';
+  severity: RuleSeverity;
+  category?: string;
   enabled?: boolean;
+  // Optional custom instructions for the AI
+  instructions?: string;
 }

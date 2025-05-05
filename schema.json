@@ -1,0 +1,84 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Review Code AI Configuration",
+  "description": "Configuration for Review Code AI tool",
+  "type": "object",
+  "properties": {
+    "include": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "File patterns to include in the review"
+    },
+    "exclude": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "File patterns to exclude from the review"
+    },
+    "maxFileSizeKB": {
+      "type": "number",
+      "description": "Maximum file size in KB to process"
+    },
+    "rateLimit": {
+      "type": "object",
+      "properties": {
+        "requestsPerMinute": {
+          "type": "number",
+          "description": "Maximum number of API requests per minute"
+        }
+      }
+    },
+    "autoFix": {
+      "type": "boolean",
+      "description": "Whether to automatically fix issues when possible"
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": ["markdown", "json", "console"],
+          "description": "Output format for the review results"
+        },
+        "showRuleInfo": {
+          "type": "boolean",
+          "description": "Whether to include rule information in the output"
+        }
+      }
+    },
+    "rules": {
+      "type": "object",
+      "additionalProperties": {
+        "type": ["object", "boolean"],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the rule is enabled"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["high", "medium", "low", "info", "warning", "error"],
+            "description": "Severity level for the rule"
+          }
+        }
+      }
+    },
+    "overrides": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "rules": {
+            "type": "object",
+            "additionalProperties": {
+              "type": ["object", "boolean"]
+            }
+          }
+        }
+      }
+    }
+  }
+}

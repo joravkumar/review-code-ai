@@ -1,157 +1,201 @@
 import { Command } from "commander";
-import { GitLab } from "./gitlab";
-import { OpenAI } from "./openai";
-import { Gemini } from "./gemini";
-import { delay, getDiffBlocks, getLineObj } from "./utils";
-import { AIReviewService } from "./ai-rules/ai-review.service";
-import * as path from "path";
+import * as path from 'path';
+import * as fs from 'fs';
+import { AIReviewService } from "./ai-rules/ai-review.service.js";
+import { AIClient } from "./ai/client.js";
+import { GitLabService } from "./gitlab/gitlab.service.js";
+import { delay, getLineObj } from "./utils/index.js";
+import { ConfigLoader } from "./config/config-loader.js";
+import { FileUtils } from "./utils/file-utils.js";
+import { RateLimiter } from "./utils/rate-limiter.js";
+import ora from 'ora';
+import chalk from 'chalk';
 
 const program = new Command();
 
 program
-  .option(
-    "-g, --gitlab-api-url <string>",
-    "GitLab API URL",
-    " https://gitlab.com/api/v4"
-  )
-  .option("-t, --gitlab-access-token <string>", "GitLab Access Token")
-  .option(
-    "-o, --openai-api-url <string>",
-    "OpenAI API URL",
-    "https://api.openai.com/v1"
-  )
   .option("-a, --openai-access-token <string>", "OpenAI Access Token")
   .option("-p, --project-id <number>", "GitLab Project ID")
   .option("-m, --merge-request-id <string>", "GitLab Merge Request ID")
   .option("-org, --organization-id <number>", "organization ID")
   .option("-c, --custom-model <string>", "Custom Model ID", "gpt-3.5-turbo")
-  .option("-mode, --mode <string>", "Mode use OpenAI or Gemini", "openai") // add mode option
+  .option(
+    "--mode <mode>",
+    "AI mode to use (openai or gemini)",
+    "openai"
+  )
+  .option(
+    "--config <path>",
+    "Path to configuration file",
+    "./.review-code-ai.json"
+  )
+  .option("-r, --rules-path <string>", "Path to custom rules directory or file")
+  .option("--no-default-rules", "Disable default rules")
   .parse(process.argv);
 
-async function run() {
-  const {
-    gitlabApiUrl,
-    gitlabAccessToken,
-    openaiApiUrl,
-    openaiAccessToken,
-    projectId,
-    mergeRequestId,
-    organizationId,
-    customModel,
-    mode, // get the mode option
-  } = program.opts();
+async function run(
+  projectId: string,
+  mergeRequestId: string,
+  gitlabToken: string,
+  openaiApiKey: string,
+  geminiApiKey: string,
+  mode: string,
+  configPath?: string
+) {
+  const spinner = ora('Initializing code review...').start();
+  
+  try {
+    // Load configuration
+    spinner.text = 'Loading configuration...';
+    const config = await ConfigLoader.loadConfig(configPath);
+    
+    // Initialize services
+    const gitlab = new GitLabService(gitlabToken, projectId);
+    const aiClient = new AIClient(openaiApiKey, geminiApiKey);
+    
+    // Initialize AIReviewService with empty rules for now
+    const aiReviewService = new AIReviewService([], {
+      apiUrl: '',
+      accessToken: openaiApiKey,
+      model: 'gpt-4',
+    });
+    
+    const rateLimiter = new RateLimiter(config.rateLimit?.requestsPerMinute || 60);
 
-  const gitlab = new GitLab({
-    gitlabApiUrl,
-    gitlabAccessToken,
-    projectId,
-    mergeRequestId,
-  });
+    spinner.text = `Starting code review for merge request ${mergeRequestId} in project ${projectId}`;
+    console.log();
 
-  // Initialize AI Review Service with rules
-  const aiReviewService = new AIReviewService(
-    undefined, // Using default rules from all-rules.ts
-    {
-      apiUrl: openaiApiUrl,
-      accessToken: openaiAccessToken,
-      orgId: organizationId,
-      model: customModel,
-    },
-    mode === "gemini"
-      ? {
-          apiUrl: openaiApiUrl,
-          accessToken: openaiAccessToken,
-          model: customModel,
-        }
-      : undefined
-  );
-
-  // Load AI rules
-  await aiReviewService.initialize();
-
-  let aiClient;
-  if (mode === "gemini") {
-    console.log("Creating Gemini client...");
-    aiClient = new Gemini(openaiApiUrl, openaiAccessToken, customModel);
-  } else {
-    console.log("Creating OpenAI client...");
-    aiClient = new OpenAI(
-      openaiApiUrl,
-      openaiAccessToken,
-      organizationId,
-      customModel
-    );
-  }
-
-  await gitlab.init().catch(() => {
-    console.log("gitlab init error");
-  });
-
-  const changes = await gitlab.getMergeRequestChanges().catch(() => {
-    console.log("get merge request changes error");
-  });
-
-  for (const change of changes) {
-    if (
-      change.renamed_file ||
-      change.deleted_file ||
-      !change?.diff?.startsWith("@@")
-    ) {
-      continue;
-    }
-    const diffBlocks = getDiffBlocks(change.diff);
-    for (const block of diffBlocks) {
+    // Get merge request changes
+    spinner.text = 'Fetching merge request changes...';
+    const changes = await gitlab.getMergeRequestChanges(mergeRequestId);
+    
+    const filteredChanges = changes.filter((change: { new_path: string }) => {
+      if (!change.new_path) return false;
+      
       try {
-        // Parse line numbers from the diff block
-        const lineRegex = /@@\s-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/;
-        const matches = lineRegex.exec(block);
-        let lineObj = {};
-        if (matches) {
-          lineObj = getLineObj(matches, block);
-        }
+        return FileUtils.isTextFile(change.new_path) &&
+               ConfigLoader.shouldProcessFile(change.new_path, config);
+      } catch (error) {
+        console.warn(`Error processing file ${change.new_path}:`, error);
+        return false;
+      }
+    });
 
-        // Use AI review service with all rules
-        const results = await aiReviewService.reviewWithAllRules(
-          block,
-          mode as "openai" | "gemini"
-        );
+    console.log(`\n${chalk.bold('Reviewing changes:')}`);
+    console.log(`- Found ${changes.length} files with changes`);
+    console.log(`- ${filteredChanges.length} files after filtering\n`);
 
-        // Format and post the results
-        const formattedResults = aiReviewService.formatResults(results);
-        if (
-          formattedResults &&
-          !formattedResults.includes("No rules were applied")
-        ) {
-          await gitlab.addReviewComment(
-            { ...lineObj, new_content: block },
-            change,
-            `### AI Code Review Results\n\n${formattedResults}`
-          );
-          await delay(1000);
-        }
+    if (filteredChanges.length === 0) {
+      spinner.succeed('No files to review after applying filters');
+      return;
+    }
 
-        // Fallback to direct AI review if needed
-        const directResult = await aiClient.reviewCodeChange(block);
-        if (directResult && directResult !== "666") {
-          await gitlab.addReviewComment(
-            { ...lineObj, new_content: block },
-            change,
-            directResult
-          );
-          await delay(1000);
+
+    // Process each file
+    for (const change of filteredChanges) {
+      if (!change.diff) continue;
+
+      const fileSpinner = ora(`Processing ${change.new_path}`).start();
+      
+      try {
+        // Split diff into blocks of code
+        const diffBlocks = change.diff.split("\n\n").filter(Boolean);
+        fileSpinner.text = `Processing ${change.new_path} (${diffBlocks.length} blocks)`;
+
+        // Process each block
+        for (const block of diffBlocks) {
+          try {
+            // Apply rate limiting
+            await rateLimiter.acquire();
+
+            // Parse line numbers from the diff block
+            const lineRegex = /@@\s-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/;
+            const matches = lineRegex.exec(block);
+            let lineObj = {};
+            if (matches) {
+              lineObj = getLineObj(matches, block);
+            }
+
+
+            // Get AI review using the configured rules
+            const results = await aiReviewService.reviewWithAllRules(
+              block,
+              { provider: mode as "openai" | "gemini" }
+            );
+
+            // Filter out any rules that didn't find issues
+            const meaningfulResults = results.filter(result => {
+              if (!result.review) return false;
+              
+              const reviewText = result.review.trim();
+              return reviewText.length > 0 && 
+                     !reviewText.toUpperCase().includes("NO_ISSUES");
+            });
+
+            // If we have meaningful results, post them
+            if (meaningfulResults.length > 0) {
+              const formattedResults = aiReviewService.formatResults(meaningfulResults);
+              if (formattedResults && formattedResults.trim().length > 0) {
+                await gitlab.addReviewComment(
+                  { ...lineObj, new_content: block } as any,
+                  change,
+                  formattedResults,
+                  mergeRequestId
+                );
+                await delay(1000);
+              }
+            }
+                fileSpinner.succeed(chalk.green(`Processed ${change.new_path} (${meaningfulResults.length} issues found)`));
+          } catch (blockError: any) {
+            fileSpinner.fail(chalk.red(`Error processing block in ${change.new_path}`));
+            console.error('Block error:', blockError);
+            continue;
+          }
         }
-      } catch (e: any) {
-        if (e?.response?.status === 429) {
-          console.log("Too Many Requests, try again");
-          await delay(60 * 1000);
-          diffBlocks.push(block);
-        } else {
-          console.error("Error processing block:", e);
-        }
+      } catch (fileError: any) {
+        fileSpinner.fail(chalk.red(`Error processing file ${change.new_path}`));
+        console.error('File error:', fileError);
+        continue;
       }
     }
+
+    spinner.succeed(chalk.green('Code review completed successfully'));
+  } catch (e: any) {
+    spinner.fail(chalk.red('Code review failed'));
+    
+    if (e?.response?.status === 429) {
+      console.log(chalk.yellow("\n⚠️  Too Many Requests, waiting 60 seconds before retry..."));
+      await delay(60000);
+      await run(projectId, mergeRequestId, gitlabToken, openaiApiKey, geminiApiKey, mode, configPath);
+    } else {
+      console.error(chalk.red("\nError:"), e);
+      process.exit(1);
+    }
+  } finally {
+    spinner.stop();
   }
-  console.log("done");
 }
 
+const {
+  gitlabApiUrl,
+  gitlabAccessToken,
+  openaiApiUrl,
+  openaiAccessToken,
+  projectId,
+  mergeRequestId,
+  organizationId,
+  customModel,
+  mode,
+  config
+} = program.opts();
+
+run(
+  projectId,
+  mergeRequestId,
+  gitlabAccessToken,
+  openaiAccessToken,
+  "",
+  mode,
+  config
+);
 module.exports = run;

@@ -1,0 +1,39 @@
+{
+  "$schema": "./schema.json",
+  "include": ["**/*.{js,jsx,ts,tsx}"],
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/*.d.ts",
+    "**/*.test.*",
+    "**/*.spec.*"
+  ],
+  "maxFileSizeKB": 1000,
+  "rateLimit": {
+    "requestsPerMinute": 60
+  },
+  "autoFix": false,
+  "output": {
+    "format": "markdown",
+    "showRuleInfo": true
+  },
+  "rules": {
+    "security-no-hardcoded-secrets": {
+      "enabled": true,
+      "severity": "high"
+    },
+    "security-sql-injection": {
+      "enabled": true,
+      "severity": "high"
+    }
+  },
+  "overrides": {
+    "**/test/**/*": {
+      "rules": {
+        "security-no-hardcoded-secrets": {
+          "severity": "medium"
+        }
+      }
+    }
+  }
+}

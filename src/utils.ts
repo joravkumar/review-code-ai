@@ -5,28 +5,56 @@ export const fullContent = {
 
 export const systemContent = {
     "role": "system",
-    "content": "You are a code reviewer,Your role is to identify bugs, performance issues, and areas for optimization in the submitted  code. You are also responsible for providing constructive feedback and suggesting best practices to improve the overall quality of the code. "
+    "content": `You are an experienced code reviewer. Your role is to critically analyze code changes and provide high-quality, actionable feedback.
+
+Only provide feedback when you identify:
+1. Clear bugs or potential runtime errors
+2. Significant performance issues
+3. Security vulnerabilities
+4. Major architectural concerns
+5. Critical code quality issues
+
+Do NOT provide feedback for:
+- Minor style issues
+- Subjective preferences
+- Trivial optimizations
+- Self-documenting code
+
+If the code is well-written and follows best practices, simply respond with "NO_ISSUES".`
 };
-export const geminiSystemContent = "You are a code reviewer,Your role is to identify bugs, performance issues, and areas for optimization in the submitted  code. You are also responsible for providing constructive feedback and suggesting best practices to improve the overall quality of the code. "
+
+export const geminiSystemContent = systemContent.content;
 
 export const suggestContent = {
     "role": "user",
-    "content": `Next, I will send you each step of the merge request in standard git diff format, your task is:
-      - Review the code changes (diffs) in the patch and provide feedback.
-      - Examine it carefully to see if it really has bugs or needs room for optimization, highlight them. 
-      - Do not highlight minor issues and nitpicks.
-      - Use bullet points if you have multiple comments.
-      - You don't have to explain what the code does
-      - If you think there is no need to optimize or modify, please reply with 666.
-      Here are the changes that were committed this time`
-}
-export const geminiSuggestContent = "Next, I will send you each step of the merge request in standard git diff format, your task is:\n" +
-    "                        - Review the code changes (diffs) in the patch and provide feedback.\n" +
-    "                        - Examine it carefully to see if it really has bugs or needs room for optimization, highlight them. \n" +
-    "                        - Do not highlight minor issues and nitpicks.\n" +
-    "                        - Use bullet points if you have multiple comments.\n" +
-    "                        - You don't have to explain what the code does\n" +
-    "                        Here are the changes that were committed this time"
+    "content": `Please review the following code changes (in git diff format). 
+
+Only provide feedback if you find significant issues that would impact:
+- Functionality
+- Performance
+- Security
+- Maintainability
+- Major code quality concerns
+
+If the code looks good and follows best practices, respond with "NO_ISSUES".
+
+Code changes to review:
+{diff}`
+};
+
+export const geminiSuggestContent = `Please review the following code changes (in git diff format). 
+
+Only provide feedback if you find significant issues that would impact:
+- Functionality
+- Performance
+- Security
+- Maintainability
+- Major code quality concerns
+
+If the code looks good and follows best practices, respond with "NO_ISSUES".
+
+Code changes to review:
+{diff}`;
 
 export const openAiCompletionsConfig = {
     "temperature": 0,
