@@ -25,7 +25,7 @@
 ## Install
 
 ```sh
-npm i @hataiit9x/review-code-ai
+npm i review-code-ai
 `````
 
 ## Use
@@ -66,7 +66,7 @@ Code Review:
   stage: merge-request  
   image: node:22
   script:
-    - npm i @hataiit9x/review-code-ai -g
+    - npm i review-code-ai -g
     - review-code-ai -t "$GITLAB_TOKEN" -a "$CHATGPT_KEY" -c "$CUSTOM_MODELS" -p "$CI_MERGE_REQUEST_PROJECT_ID" -m "$CI_MERGE_REQUEST_IID"
   only:
     - merge_requests
