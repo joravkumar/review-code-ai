@@ -1,10 +1,10 @@
-# @hataiit9x/review-code-ai
+# review-code-ai
 
 ## Summary
 
 ![](preview.png)
 
-`@hataiit9x/review-code-ai` It is a small tool used for code review in GitLab Merge Requests. It supports calling the GitLab API for private deployment and uses the OpenAI API to obtain review results. Please note that when using it, ensure compliance with company regulations. 😉
+`review-code-ai` It is a small tool used for code review in GitLab Merge Requests. It supports calling the GitLab API for private deployment and uses the OpenAI API to obtain review results. Please note that when using it, ensure compliance with company regulations. 😉
 
 
 ## Features
@@ -64,7 +64,7 @@ stages:
 
 Code Review:
   stage: merge-request  
-  image: node:16
+  image: node:22
   script:
     - npm i @hataiit9x/review-code-ai -g
     - review-code-ai -t "$GITLAB_TOKEN" -a "$CHATGPT_KEY" -c "$CUSTOM_MODELS" -p "$CI_MERGE_REQUEST_PROJECT_ID" -m "$CI_MERGE_REQUEST_IID"
