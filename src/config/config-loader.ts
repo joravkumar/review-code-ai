@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { promisify } from 'util';
+import minimatch from 'minimatch';
 import { ReviewConfig, ResolvedRuleConfig } from './config.interface';
 import { AIRule } from '../ai-rules/ai-rule.interface';
 
@@ -135,19 +136,10 @@ export class ConfigLoader {
   }
 
   private static matchPattern(filePath: string, pattern: string): boolean {
-    // Convert Windows paths to Unix style
+    // Convert Windows paths to Unix style for consistent matching
     const normalizedPath = filePath.replace(/\\/g, '/');
-    
-    // Simple glob matching (can be enhanced with a proper glob library if needed)
-    const regex = new RegExp(
-      '^' + 
-      pattern
-        .replace(/\*\*/g, '.*')
-        .replace(/\*/g, '[^/]*')
-        .replace(/\?/g, '.') + 
-      '$'
-    );
 
-    return regex.test(normalizedPath);
+    // Use minimatch for reliable glob pattern matching
+    return minimatch(normalizedPath, pattern, { dot: true });
   }
 }
