@@ -41,7 +41,7 @@ Options:
   -p, --project-id <number>           GitLab Project ID
   -m, --merge-request-id <string>     GitLab Merge Request ID
   -org, --organization-id <number>    organization ID
-  -c, ----custom-model <string>       Custom Model ID (default: "gpt-3.5-turbo")
+  -c, --custom-model <string>       Custom Model ID (default: "gpt-3.5-turbo")
   -mode, --mode <string>              Mode use OpenAI or Gemini (default: openai)
   -r, --rules-path <string>           Path to custom rules directory or file
   --no-default-rules                  Disable default rules
