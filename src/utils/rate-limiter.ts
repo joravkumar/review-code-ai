@@ -22,14 +22,19 @@ export class RateLimiter {
       return;
     }
 
-    // Otherwise, calculate how long to wait
+    // Otherwise, calculate how long to wait before the oldest request expires
     const oldestRequest = this.requests[0];
-    const timeToWait = oneMinuteAgo - oldestRequest + 1000; // Add 1s buffer
+    const timeToWait = oldestRequest + 60000 - now + 1000; // Add 1s buffer
 
     if (timeToWait > 0) {
       await new Promise(resolve => setTimeout(resolve, timeToWait));
-      return this.acquire(); // Try again after waiting
     }
+
+    // Record the request after waiting
+    const afterWait = Date.now();
+    const afterOneMinuteAgo = afterWait - 60000;
+    this.requests = this.requests.filter(time => time > afterOneMinuteAgo);
+    this.requests.push(afterWait);
   }
 
   private cleanup() {
