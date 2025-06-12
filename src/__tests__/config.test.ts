@@ -1,8 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-
-// Mock fs
-jest.mock('fs');
+import { ConfigLoader } from '../config/config-loader';
 
 describe('Configuration', () => {
   const mockConfig = {
@@ -22,52 +20,49 @@ describe('Configuration', () => {
   });
 
   describe('loadConfig', () => {
-    it('should load config from file if it exists', () => {
-      const mockReadFileSync = jest.spyOn(fs, 'readFileSync');
-      mockReadFileSync.mockReturnValue(JSON.stringify(mockConfig));
+    it('should load config from file if it exists', async () => {
+      const tempDir = fs.mkdtempSync(path.join(process.cwd(), 'cfg-'));
+      const cfgPath = path.join(tempDir, '.review-code-ai.json');
+      fs.writeFileSync(cfgPath, JSON.stringify(mockConfig));
 
-      const { loadConfig } = require('../../src/config');
-      const config = loadConfig();
+      const originalCwd = process.cwd();
+      process.chdir(tempDir);
 
-      expect(config).toEqual(mockConfig);
-      expect(mockReadFileSync).toHaveBeenCalledWith(
-        path.join(process.cwd(), '.review-code-ai.json'),
-        'utf8'
-      );
+      const config = await ConfigLoader.loadConfig();
+
+      process.chdir(originalCwd);
+
+      expect(config.gitlab.apiUrl).toBe(mockConfig.gitlab.apiUrl);
+      expect(config.rules).toEqual(mockConfig.rules);
+      fs.rmSync(tempDir, { recursive: true, force: true });
     });
 
-    it('should use environment variables when config file is missing', () => {
-      const mockReadFileSync = jest.spyOn(fs, 'readFileSync');
-      mockReadFileSync.mockImplementation(() => {
-        throw new Error('File not found');
-      });
+    it('should return defaults when config file is missing', async () => {
+      const tempDir = fs.mkdtempSync(path.join(process.cwd(), 'cfg-'));
+      const originalCwd = process.cwd();
+      process.chdir(tempDir);
 
-      process.env.GITLAB_ACCESS_TOKEN = 'env-token';
-      process.env.OPENAI_API_KEY = 'env-openai-key';
+      const config = await ConfigLoader.loadConfig();
 
-      const { loadConfig } = require('../../src/config');
-      const config = loadConfig();
+      process.chdir(originalCwd);
 
-      expect(config.gitlab.accessToken).toBe('env-token');
-      expect(config.openai.accessToken).toBe('env-openai-key');
+      expect(config.include).toContain('**/*.{js,jsx,ts,tsx}');
+      fs.rmSync(tempDir, { recursive: true, force: true });
     });
   });
 
-  describe('mergeConfig', () => {
-    it('should merge command line options with config file', () => {
-      const { mergeConfig } = require('../../src/config');
-      
-      const baseConfig = { gitlab: { apiUrl: 'https://gitlab.com' } };
-      const cliOptions = { projectId: 123 };
-      
-      const result = mergeConfig(baseConfig, cliOptions);
-      
-      expect(result).toEqual({
-        gitlab: {
-          apiUrl: 'https://gitlab.com',
-          projectId: 123
-        }
-      });
+  describe('shouldProcessFile', () => {
+    it('determines if a file should be processed based on config', async () => {
+      const tempDir = fs.mkdtempSync(path.join(process.cwd(), 'file-'));
+      const filePath = path.join(tempDir, 'example.ts');
+      fs.writeFileSync(filePath, 'console.log("test");');
+
+      const config = await ConfigLoader.loadConfig();
+
+      const result = ConfigLoader.shouldProcessFile(filePath, config);
+
+      expect(result).toBe(true);
+      fs.rmSync(tempDir, { recursive: true, force: true });
     });
   });
 });
