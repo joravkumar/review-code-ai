@@ -34,7 +34,7 @@ npm i review-code-ai
 Usage: review-code-ai [options]
 
 Options:
-  -g, --gitlab-api-url <string>       GitLab API URL (default: " https://gitlab.com/api/v4")
+  -g, --gitlab-api-url <string>       GitLab API URL (default: "https://gitlab.com/api/v4")
   -t, --gitlab-access-token <string>  GitLab Access Token
   -o, --openai-api-url <string>       OpenAI API URL (default: "https://api.openai.com/v1")
   -a, --openai-access-token <string>  OpenAI Access Token
